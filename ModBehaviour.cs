@@ -299,7 +299,7 @@ namespace BetterMapMarker
 
         private static string GetDisplayName(InteractableLootbox lootbox)
         {
-            var name = lootbox.name;//显示箱子名称(InteractName)
+            var name = lootbox.InteractName;//显示箱子名称(InteractName)
             return string.IsNullOrEmpty(name) ? "*" : name;
         }
 
