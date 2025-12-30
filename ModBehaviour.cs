@@ -27,19 +27,19 @@ namespace BetterMapMarker
     public static class MarkerVisuals
     {
 
-        public static Sprite SetMarkerIcon(InteractableLootbox lootbox)
+        public static Sprite SetMarkerIcon(InteractableLootbox Lootbox)
         {
             var icon = MapMarkerManager.Icons[6];//游戏自带箱子图标
-            if (lootbox.name.Contains("Lab", StringComparison.OrdinalIgnoreCase))
-                icon= MapMarkerManager.Icons[12];
+            if (Lootbox.name.Contains("Lab", StringComparison.OrdinalIgnoreCase))
+                icon= MapMarkerManager.Icons[12];//自定义图标（要先添加）
             return icon;
         }
 
 
-        //颜色目前修改不了，默认黄色
-        public static Color SetMarkerColor(LootboxState lootboxState)
+        //箱子是黄色，打开后颜色变成白色
+        public static Color SetMarkerColor(LootboxState State)
         {
-            if (lootboxState==LootboxState.Closed)
+            if (State==LootboxState.Closed)
                 return Color.yellow;
             else
                 return Color.white;
@@ -267,7 +267,7 @@ namespace BetterMapMarker
 
                 marker.Poi.HideIcon = false;
             }
-            Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position}");
+           //Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position}");
             UpdateMarker(marker, displayName);
 
         }
@@ -275,45 +275,52 @@ namespace BetterMapMarker
 
         private void UpdateMarker(LootboxMarker marker,string displayName)
         {
-            
+
             if (marker?.MarkerObject == null || marker.Poi == null)
                 return;
 
             //marker.MarkerObject.transform.position = marker.Lootbox.transform.position;
+            var newState = GetLootboxState(marker.Lootbox);
 
-            /* 想要实现箱子打开后将标记颜色改为黄色，但找不到检测箱子打开的属性
-             * 因此只能在标记创建时设置状态，之后无法动态更新
-             * 如果游戏后续版本提供相关事件或属性监听，可以再行实现动态更新功能
-             * 下面的代码是尝试实现动态更新的思路，但由于上述原因，目前无法生效
-            
-
-            if (marker.Lootbox.Looted==true)
+            //箱子打开后将标记颜色改为白色
+            if (marker.State != newState)
             {
-                marker.State = GetLootboxState(marker.Lootbox);
+                marker.State = newState;
                 marker.Color = MarkerVisuals.SetMarkerColor(marker.State);
-                marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.lootbox), displayName, followActiveScene: true);
+                marker.Poi.Color = marker.Color;
+                marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.Lootbox), displayName, followActiveScene: true);
                 marker.Poi.HideIcon = false;
-                Debug.Log("更新箱子标记");
+                //Debug.Log("更新箱子标记");
             }
 
-            */
+  
 
         }
 
         private static string GetDisplayName(InteractableLootbox lootbox)
         {
-            var name = lootbox.InteractName;
+            var name = lootbox.name;//显示箱子名称(InteractName)
             return string.IsNullOrEmpty(name) ? "*" : name;
         }
 
-        //检测箱子是否打开，但Lootbox.Looted==false这个条件不对
+        //检测箱子是否打开
         private LootboxState GetLootboxState(InteractableLootbox Lootbox)
         {
-            if (Lootbox.Looted==false)
-                return LootboxState.Closed;
+            var interactMarker = Lootbox.GetComponentInChildren<InteractMarker>();
+            if (interactMarker != null)
+            {
+                //Debug.Log("interactMarker不为空");
+                // 如果showIfUsedObject存在且处于激活状态（或hideIfUsedObject存在且处于未激活状态），则箱子被打开
+                if ((interactMarker.showIfUsedObject != null && interactMarker.showIfUsedObject.activeInHierarchy)||
+                    (interactMarker.hideIfUsedObject != null && !interactMarker.hideIfUsedObject.activeInHierarchy))
+                {
+                    //Debug.Log("箱子已打开");
+                    return LootboxState.Opened;
+                }    
 
-            else
-                return LootboxState.Opened;
+            }
+
+            return LootboxState.Closed;
 
         }
 
@@ -327,7 +334,7 @@ namespace BetterMapMarker
             {
                 return;
             }
-            // 简单的计时器逻辑（参考BossLiveMapMod）
+            // 简单的计时器逻辑
             _scanCooldown -= Time.deltaTime;
             if (_scanCooldown <= 0)
             {
@@ -336,22 +343,7 @@ namespace BetterMapMarker
             }
         }
 
-        private bool StepScanTimer()
-        {
-            _scanCooldown -= Time.deltaTime;
-            if (_scanCooldown > 0f)
-                return false;
-
-            _scanCooldown = ScanIntervalSeconds;
-            return true;
-        }
-
-        /// <summary>
-        /// Lightweight validation for per-frame checks that avoids expensive GetComponent calls.
-        /// Uses cached POI flag from the marker itself.
-        /// </summary>
-        /// 
-
+        //重置和销毁标记
 
         private void DestroyMarker(InteractableLootbox lootbox)
         {
@@ -363,7 +355,6 @@ namespace BetterMapMarker
 
             _markers.Remove(lootbox);
 
-            // If this was a boss entry, mark corresponding BossList entries as dead (strike-through in UI)
 
             if (entry.Poi != null)
             {
@@ -374,9 +365,6 @@ namespace BetterMapMarker
                 DestroySafely(entry.MarkerObject);
             }
         }
-
-
-
 
 
         private void ResetMarkers()

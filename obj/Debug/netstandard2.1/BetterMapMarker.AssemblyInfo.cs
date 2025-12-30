@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BetterMapMarker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8326bdf8db60f0fb7d2371dad9ca191300e0d457")]
 [assembly: System.Reflection.AssemblyProductAttribute("BetterMapMarker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BetterMapMarker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
