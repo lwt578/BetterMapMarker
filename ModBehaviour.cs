@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Reflection;
+using Unity.VisualScripting.Antlr3.Runtime;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TextCore.Text;
@@ -29,9 +30,18 @@ namespace BetterMapMarker
 
         public static Sprite SetMarkerIcon(InteractableLootbox Lootbox)
         {
-            var icon = MapMarkerManager.Icons[6];//游戏自带箱子图标
+            var icon = MapMarkerManager.Icons[6];//默认游戏自带箱子图标
+
+            if (Lootbox.name.Contains("Hidden", StringComparison.OrdinalIgnoreCase))
+                icon = MapMarkerManager.Icons[9];
+            if (Lootbox.name.Contains("Enemy", StringComparison.OrdinalIgnoreCase))
+                icon = MapMarkerManager.Icons[10];
+            if (Lootbox.name.Contains("Clone", StringComparison.OrdinalIgnoreCase)&& 
+                !Lootbox.name.Contains("Enemy", StringComparison.OrdinalIgnoreCase))
+                icon = MapMarkerManager.Icons[5];
             if (Lootbox.name.Contains("Lab", StringComparison.OrdinalIgnoreCase))
                 icon= MapMarkerManager.Icons[12];//自定义图标（要先添加）
+
             return icon;
         }
 
@@ -72,7 +82,7 @@ namespace BetterMapMarker
 
         private bool _mapActive;
         private float _scanCooldown;
-        private const float ScanIntervalSeconds = 3f;
+        private const float ScanIntervalSeconds = 1f;
 
         // Special preset names loaded from text file (one name per line). Comparisons are case-insensitive.
         private static DateTime _specialPresetsLastWriteUtc = DateTime.MinValue;
@@ -167,8 +177,6 @@ namespace BetterMapMarker
 
         }
 
-
-
         private static bool IsLootboxValid(InteractableLootbox lootbox, out bool hasPreexistingPoi)
         {
             hasPreexistingPoi = false;
@@ -197,12 +205,12 @@ namespace BetterMapMarker
                 if (lootbox == null || lootbox.Inventory == null) continue;
 
                 // 过滤不需要的箱子
-                string lootboxName = lootbox.name ?? string.Empty;
-                if (lootboxName.Contains("PetProxy", StringComparison.OrdinalIgnoreCase) ||
-                    lootboxName.Contains("PlayerStorage", StringComparison.OrdinalIgnoreCase))
+                if (lootbox.name.Contains("PetProxy", StringComparison.OrdinalIgnoreCase) ||
+                    lootbox.name.Contains("PlayerStorage", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 AddOrUpdateMarker(lootbox);
+
             }
         }
 
@@ -217,10 +225,20 @@ namespace BetterMapMarker
                 return;
 
             var displayName = GetDisplayName(lootbox);
-            // If marker already exists, update it only if Live is ON
+
             if (_markers.TryGetValue(lootbox, out var marker))
             {
-                UpdateMarker(marker,displayName);
+                // check if lootbox is empty, if so remove marker
+                if (IsLootboxEmpty(lootbox))
+                {
+                    Debug.Log("检查箱子是否为空（add）");
+                    DestroyMarker(lootbox);
+                    Debug.Log($"移除空箱子标记: {displayName}");
+                    return;
+                }
+                else
+                    UpdateMarker(marker, displayName);
+
                 return;
             }
 
@@ -267,11 +285,10 @@ namespace BetterMapMarker
 
                 marker.Poi.HideIcon = false;
             }
-           //Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position}");
+            //Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position}");
+
             UpdateMarker(marker, displayName);
-
         }
-
 
         private void UpdateMarker(LootboxMarker marker,string displayName)
         {
@@ -280,30 +297,35 @@ namespace BetterMapMarker
                 return;
 
             //marker.MarkerObject.transform.position = marker.Lootbox.transform.position;
-            var newState = GetLootboxState(marker.Lootbox);
 
-            //箱子打开后将标记颜色改为白色
-            if (marker.State != newState)
+            if (IsLootboxEmpty(marker.Lootbox))
             {
-                marker.State = newState;
+                Debug.Log("检查箱子是否为空（update）");
+                DestroyMarker(marker.Lootbox);
+                return;
+            } 
+                
+
+            //Change marker color to white if lootbox was opened and lootbox not empty
+            if (GetLootboxState(marker.Lootbox)==LootboxState.Opened && marker.Lootbox.Inventory != null)
+            {
+                marker.State = GetLootboxState(marker.Lootbox);
                 marker.Color = MarkerVisuals.SetMarkerColor(marker.State);
                 marker.Poi.Color = marker.Color;
                 marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.Lootbox), displayName, followActiveScene: true);
                 marker.Poi.HideIcon = false;
-                //Debug.Log("更新箱子标记");
+                Debug.Log("更新箱子标记");
             }
-
-  
 
         }
 
         private static string GetDisplayName(InteractableLootbox lootbox)
         {
-            var name = lootbox.InteractName;//显示箱子名称(InteractName)
+            var name = lootbox.InteractName;//show box name(InteractName)
             return string.IsNullOrEmpty(name) ? "*" : name;
         }
 
-        //检测箱子是否打开
+        //check if lootbox is opened or closed
         private LootboxState GetLootboxState(InteractableLootbox Lootbox)
         {
             var interactMarker = Lootbox.GetComponentInChildren<InteractMarker>();
@@ -324,6 +346,13 @@ namespace BetterMapMarker
 
         }
 
+        private bool IsLootboxEmpty(InteractableLootbox lootbox)
+        {
+            // check if lootbox inventory is empty
+            if (lootbox.Inventory.GetItemCount()==0)
+                return true;
+            return false;
+        }
 
         /// <summary>
         /// Check for configuration changes and only apply changes when config is changed.
@@ -343,27 +372,24 @@ namespace BetterMapMarker
             }
         }
 
-        //重置和销毁标记
+        //reset or destroy marker
 
         private void DestroyMarker(InteractableLootbox lootbox)
         {
             if (lootbox == null)
                 return;
 
-            if (!_markers.TryGetValue(lootbox, out var entry))
+            if (!_markers.TryGetValue(lootbox, out var marker))
                 return;
 
             _markers.Remove(lootbox);
 
-
-            if (entry.Poi != null)
+            if (marker.Poi != null)
             {
-                PointsOfInterests.Unregister(entry.Poi);
+                PointsOfInterests.Unregister(marker.Poi);
             }
-            if (entry.MarkerObject != null)
-            {
-                DestroySafely(entry.MarkerObject);
-            }
+                      
+            Debug.Log($"销毁箱子标记: {marker.DisplayName}");
         }
 
 
