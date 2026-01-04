@@ -220,11 +220,9 @@ namespace BetterMapMarker
             if (!IsLootboxValid(lootbox, out bool hasPreexistingPoi))
                 return;
 
-            // Don't create markers for characters that already have a POI component
-            if (hasPreexistingPoi)
-                return;
-
             var displayName = GetDisplayName(lootbox);
+
+            // Don't create markers for characters that already have a POI component
 
             if (_markers.TryGetValue(lootbox, out var marker))
             {
@@ -234,6 +232,7 @@ namespace BetterMapMarker
                     DestroyMarker(lootbox);
                     return;
                 }
+                
                 else
                     UpdateMarker(marker, displayName);
 
