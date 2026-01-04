@@ -39,6 +39,8 @@ namespace BetterMapMarker
             if (Lootbox.name.Contains("Clone", StringComparison.OrdinalIgnoreCase)&& 
                 !Lootbox.name.Contains("Enemy", StringComparison.OrdinalIgnoreCase))
                 icon = MapMarkerManager.Icons[5];
+            if (Lootbox.name.Contains("Formula", StringComparison.OrdinalIgnoreCase))
+                icon = MapMarkerManager.Icons[7];
             if (Lootbox.name.Contains("Lab", StringComparison.OrdinalIgnoreCase))
                 icon= MapMarkerManager.Icons[12];//自定义图标（要先添加）
 
@@ -87,8 +89,6 @@ namespace BetterMapMarker
         // Special preset names loaded from text file (one name per line). Comparisons are case-insensitive.
         private static DateTime _specialPresetsLastWriteUtc = DateTime.MinValue;
 
-        // 缓存所有场景中的对象
-        private readonly HashSet<InteractableLootbox> allLootboxesCache = new HashSet<InteractableLootbox>();
 
 
 
@@ -231,9 +231,7 @@ namespace BetterMapMarker
                 // check if lootbox is empty, if so remove marker
                 if (IsLootboxEmpty(lootbox))
                 {
-                    Debug.Log("检查箱子是否为空（add）");
                     DestroyMarker(lootbox);
-                    Debug.Log($"移除空箱子标记: {displayName}");
                     return;
                 }
                 else
@@ -300,29 +298,36 @@ namespace BetterMapMarker
 
             if (IsLootboxEmpty(marker.Lootbox))
             {
-                Debug.Log("检查箱子是否为空（update）");
+                //Debug.Log("检查箱子是否为空（update）");
                 DestroyMarker(marker.Lootbox);
                 return;
             } 
                 
 
             //Change marker color to white if lootbox was opened and lootbox not empty
-            if (GetLootboxState(marker.Lootbox)==LootboxState.Opened && marker.Lootbox.Inventory != null)
+            if (GetLootboxState(marker.Lootbox)==LootboxState.Opened)
             {
                 marker.State = GetLootboxState(marker.Lootbox);
                 marker.Color = MarkerVisuals.SetMarkerColor(marker.State);
                 marker.Poi.Color = marker.Color;
                 marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.Lootbox), displayName, followActiveScene: true);
                 marker.Poi.HideIcon = false;
-                Debug.Log("更新箱子标记");
+                //Debug.Log("更新箱子标记");
             }
 
         }
 
         private static string GetDisplayName(InteractableLootbox lootbox)
         {
-            var name = lootbox.InteractName;//show box name(InteractName)
-            return string.IsNullOrEmpty(name) ? "*" : name;
+            string name = lootbox.name;//show box name(InteractName)
+            if(name.Contains("Formula", StringComparison.OrdinalIgnoreCase))
+            {
+                string FormulaName = string.Concat(lootbox.InteractName, name.Substring(16));
+                return FormulaName;
+            }
+            else
+                return lootbox.InteractName;
+
         }
 
         //check if lootbox is opened or closed
@@ -387,9 +392,10 @@ namespace BetterMapMarker
             if (marker.Poi != null)
             {
                 PointsOfInterests.Unregister(marker.Poi);
+                marker.Poi = null;
             }
+            //Destroy lootbox marker
                       
-            Debug.Log($"销毁箱子标记: {marker.DisplayName}");
         }
 
 
