@@ -5,6 +5,10 @@
     {
       "AbsoluteMoniker": "D:0:0:{1B68A1EA-825A-2701-F0A5-0A935A5F05A3}|BetterMapMarker.csproj|d:\\desktop\\bettermapmarker\\modbehaviour.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1B68A1EA-825A-2701-F0A5-0A935A5F05A3}|BetterMapMarker.csproj|solutionrelative:modbehaviour.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{1B68A1EA-825A-2701-F0A5-0A935A5F05A3}|BetterMapMarker.csproj|d:\\desktop\\bettermapmarker\\lootboxmarkerui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{1B68A1EA-825A-2701-F0A5-0A935A5F05A3}|BetterMapMarker.csproj|solutionrelative:lootboxmarkerui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,8 +18,16 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 2,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
@@ -24,19 +36,23 @@
               "RelativeDocumentMoniker": "ModBehaviour.cs",
               "ToolTip": "D:\\Desktop\\BetterMapMarker\\ModBehaviour.cs",
               "RelativeToolTip": "ModBehaviour.cs",
-              "ViewState": "AgIAANcAAAAAAAAAAAD4v+8AAAANAAAAAAAAAA==",
+              "ViewState": "AgIAAM0AAAAAAAAAAAAAwNcAAAAqAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-03T11:47:55.546Z",
-              "IsPinned": true,
+              "WhenOpened": "2026-01-07T12:42:30.528Z",
               "EditorCaption": ""
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "LootboxMarkerUI.cs",
+              "DocumentMoniker": "D:\\Desktop\\BetterMapMarker\\LootboxMarkerUI.cs",
+              "RelativeDocumentMoniker": "LootboxMarkerUI.cs",
+              "ToolTip": "D:\\Desktop\\BetterMapMarker\\LootboxMarkerUI.cs",
+              "RelativeToolTip": "LootboxMarkerUI.cs",
+              "ViewState": "AgIAABkAAAAAAAAAAAAQwKwAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-07T04:51:38.264Z",
+              "EditorCaption": ""
             }
           ]
         }

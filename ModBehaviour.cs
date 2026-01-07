@@ -2,6 +2,7 @@
 using Duckov.MiniMaps.UI;
 using Duckov.Scenes;
 using Duckov.UI;
+using Duckov.UI.MainMenu;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -71,7 +72,6 @@ namespace BetterMapMarker
             public SimplePointOfInterest? Poi;
             public string? DisplayName;
             public LootboxState State;
-            public bool HasPreexistingPoi; // Cached flag to avoid GetComponent calls
             public Color Color;
         }
 
@@ -81,6 +81,15 @@ namespace BetterMapMarker
         private readonly Dictionary<InteractableLootbox, LootboxMarker> _markers =
             new Dictionary<InteractableLootbox, LootboxMarker>();
 
+        private static bool _showAll = true;  // 默认显示所有箱子
+        private static bool _showOnlyJLab = false;  // 只显示JLab箱等高价值箱子
+        private LootboxMarkerUI _lootboxMarkerUI;  // UI实例
+        private bool _isUIVisible = true;  // UI是否可见
+
+        // 高价值箱子目录
+        private readonly List<string> _specialLootboxNames = new List<string> {
+           "Starter", "Lab","Lux","Cash","Hang","Formula","Weapon","Clone","Hidden","Technical","Bullet"
+        };
 
         private bool _mapActive;
         private float _scanCooldown;
@@ -89,8 +98,79 @@ namespace BetterMapMarker
         // Special preset names loaded from text file (one name per line). Comparisons are case-insensitive.
         private static DateTime _specialPresetsLastWriteUtc = DateTime.MinValue;
 
+        // 判断是否应该显示这个箱子
+        private bool ShouldShow(InteractableLootbox lootbox)
+        {
+            // 如果选择只显示高价值箱子
+            if (_showOnlyJLab)
+            {
+                foreach (var specialName in _specialLootboxNames)
+                {
+                    if (lootbox.name.Contains(specialName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                return false;
+            }
+            
+            return _showAll;// 显示所有箱子
+        }
 
+        private void CreateSimpleUI()
+        {
+            if (_lootboxMarkerUI != null) return;
 
+            try
+            {
+                var mapView = MiniMapView.Instance;
+                if (mapView == null) return;
+
+                // 创建UI
+                var uiGO = new GameObject("SimpleLootboxUI", typeof(RectTransform));
+                uiGO.transform.SetParent(mapView.transform, false);
+                _lootboxMarkerUI = uiGO.AddComponent<LootboxMarkerUI>();
+                _lootboxMarkerUI.Initialize(this);
+
+                Debug.Log("箱子标记UI已创建");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"创建箱子标记UI失败: {ex.Message}");
+            }
+        }
+
+        private void DestroySimpleUI()
+        {
+            try
+            {
+                if (_lootboxMarkerUI != null)
+                {
+                    Destroy(_lootboxMarkerUI.gameObject);
+                    _lootboxMarkerUI = null;
+                }
+            }
+            catch { }
+        }
+
+        // 切换显示模式
+        public void SetShowAll(bool showAll)
+        {
+            _showAll = showAll;
+            _showOnlyJLab = !showAll;
+
+            // 重新扫描和更新标记
+            ResetMarkers();
+            ScanLootboxes();
+        }
+
+        // 切换UI可见性
+        public void ToggleUIVisibility()
+        {
+            _isUIVisible = !_isUIVisible;
+            if (_lootboxMarkerUI != null)
+            {
+                _lootboxMarkerUI.SetVisible(_isUIVisible);
+            }
+        }
 
         void OnEnable()
         {
@@ -106,10 +186,11 @@ namespace BetterMapMarker
             if (IsMapOpen())
             {
                 BeginTracking();
+                CreateSimpleUI();
             }
-
-
+                       
         }
+
 
         void OnDisable()
         {
@@ -119,6 +200,7 @@ namespace BetterMapMarker
             SceneLoader.onStartedLoadingScene -= OnSceneStartedLoading;
             SceneLoader.onFinishedLoadingScene -= OnSceneFinishedLoading;
             EndTracking();
+            DestroySimpleUI();
 
         }
 
@@ -151,15 +233,32 @@ namespace BetterMapMarker
         private void OnActiveViewChanged()
         {
             if (IsMapOpen())
+            {
                 BeginTracking();
+
+                if (_lootboxMarkerUI != null)
+                {
+                    _lootboxMarkerUI.SetVisible(_isUIVisible);
+                }
+            }
+
             else
+            {
                 EndTracking();
+                // 隐藏UI，但保持对象
+                if (_lootboxMarkerUI != null)
+                {
+                    _lootboxMarkerUI.SetVisible(false);
+                }
+            }
         }
         private void BeginTracking()
         {
             // Don't reset markers on map open - preserve last known positions when Live is OFF
             // ResetMarkers();
             _mapActive = true;
+
+            CreateSimpleUI();
 
             ScanLootboxes();
             Debug.Log("开始追踪箱子位置");
@@ -177,9 +276,8 @@ namespace BetterMapMarker
 
         }
 
-        private static bool IsLootboxValid(InteractableLootbox lootbox, out bool hasPreexistingPoi)
+        private static bool IsLootboxValid(InteractableLootbox lootbox)
         {
-            hasPreexistingPoi = false;
 
             if (lootbox == null)
                 return false;
@@ -187,9 +285,6 @@ namespace BetterMapMarker
             var go = lootbox.gameObject;
             if (!go.scene.IsValid() || !go.scene.isLoaded)
                 return false;
-
-            // Only check GetComponent during initial scan, cache the result
-            hasPreexistingPoi = lootbox.GetComponent<SimplePointOfInterest>() != null;
 
             return true;
         }
@@ -209,6 +304,10 @@ namespace BetterMapMarker
                     lootbox.name.Contains("PlayerStorage", StringComparison.OrdinalIgnoreCase))
                     continue;
 
+                // 根据选择决定是否显示这个箱子
+                if (!ShouldShow(lootbox))
+                    continue;
+
                 AddOrUpdateMarker(lootbox);
 
             }
@@ -217,12 +316,13 @@ namespace BetterMapMarker
         private void AddOrUpdateMarker(InteractableLootbox lootbox)
         {
 
-            if (!IsLootboxValid(lootbox, out bool hasPreexistingPoi))
+            if (!IsLootboxValid(lootbox))
                 return;
 
-            var displayName = GetDisplayName(lootbox);
 
-            // Don't create markers for characters that already have a POI component
+            var displayName = GetDisplayName(lootbox);
+            var currentState = GetLootboxState(lootbox);
+
 
             if (_markers.TryGetValue(lootbox, out var marker))
             {
@@ -232,11 +332,13 @@ namespace BetterMapMarker
                     DestroyMarker(lootbox);
                     return;
                 }
-                
                 else
-                    UpdateMarker(marker, displayName);
-
-                return;
+                {
+                    if (marker.State!= currentState)
+                        UpdateMarker(marker, displayName);
+                    else
+                        return;
+                }  
             }
 
             var markerObject = new GameObject($"CharacterMarker:{displayName}");
@@ -257,7 +359,6 @@ namespace BetterMapMarker
                 MarkerObject = markerObject,
                 Poi = poi,
                 DisplayName = displayName,
-                HasPreexistingPoi = hasPreexistingPoi,
                 State = state,
                 Color = color
             };
@@ -270,17 +371,13 @@ namespace BetterMapMarker
 
             if (icon != null)
             {
+
+                marker.Poi.Color = marker.Color;
+                marker.Poi.ShadowColor = Color.clear;
+
                 marker.Poi.Setup(icon, displayName, followActiveScene: true);
-
-                // 设置颜色
-                try
-                {
-                    marker.Poi.Color = marker.Color;
-                    marker.Poi.ShadowColor = Color.clear;
-                }
-                catch { }
-
                 marker.Poi.HideIcon = false;
+
             }
             //Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position}");
 
@@ -291,7 +388,7 @@ namespace BetterMapMarker
         {
 
             if (marker?.MarkerObject == null || marker.Poi == null)
-                return;
+                return; 
 
             //marker.MarkerObject.transform.position = marker.Lootbox.transform.position;
 
@@ -300,20 +397,24 @@ namespace BetterMapMarker
                 //Debug.Log("检查箱子是否为空（update）");
                 DestroyMarker(marker.Lootbox);
                 return;
-            } 
-                
+            }
+            
+            var currentState = GetLootboxState(marker.Lootbox);
 
-            //Change marker color to white if lootbox was opened and lootbox not empty
-            if (GetLootboxState(marker.Lootbox)==LootboxState.Opened)
+
+            if (marker.State == currentState)
+                return;
+
+            else
             {
-                marker.State = GetLootboxState(marker.Lootbox);
+                marker.State = currentState;
                 marker.Color = MarkerVisuals.SetMarkerColor(marker.State);
                 marker.Poi.Color = marker.Color;
                 marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.Lootbox), displayName, followActiveScene: true);
                 marker.Poi.HideIcon = false;
-                //Debug.Log("更新箱子标记");
+                //Debug.Log("更新箱子标记（预设）");
+                return;
             }
-
         }
 
         private static string GetDisplayName(InteractableLootbox lootbox)
