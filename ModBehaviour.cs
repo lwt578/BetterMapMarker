@@ -341,7 +341,7 @@ namespace BetterMapMarker
                 }  
             }
 
-            var markerObject = new GameObject($"CharacterMarker:{displayName}");
+            var markerObject = new GameObject($"{displayName}");
             markerObject.transform.position = lootbox.transform.position;
 
             if (MultiSceneCore.MainScene.HasValue)
