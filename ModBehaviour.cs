@@ -1,4 +1,4 @@
-﻿using Duckov.MiniMaps;
+using Duckov.MiniMaps;
 using Duckov.MiniMaps.UI;
 using Duckov.Scenes;
 using Duckov.UI;
@@ -81,8 +81,9 @@ namespace BetterMapMarker
         private readonly Dictionary<InteractableLootbox, LootboxMarker> _markers =
             new Dictionary<InteractableLootbox, LootboxMarker>();
 
-        private static bool _showAll = true;  // 默认显示所有箱子
-        private static bool _showOnlyJLab = false;  // 只显示JLab箱等高价值箱子
+        private bool _showAll = true;  // 默认显示所有箱子
+        private bool _showOnlyJLab = false;  // 只显示JLab箱等高价值箱子
+        private bool _showNone = false;  // 新增：不显示任何标记
         private LootboxMarkerUI _lootboxMarkerUI;  // UI实例
         private bool _isUIVisible = true;  // UI是否可见
 
@@ -95,12 +96,13 @@ namespace BetterMapMarker
         private float _scanCooldown;
         private const float ScanIntervalSeconds = 1f;
 
-        // Special preset names loaded from text file (one name per line). Comparisons are case-insensitive.
-        private static DateTime _specialPresetsLastWriteUtc = DateTime.MinValue;
-
         // 判断是否应该显示这个箱子
         private bool ShouldShow(InteractableLootbox lootbox)
         {
+            // 如果不显示任何标记
+            if (_showNone)
+                return false;
+            
             // 如果选择只显示高价值箱子
             if (_showOnlyJLab)
             {
@@ -156,10 +158,23 @@ namespace BetterMapMarker
         {
             _showAll = showAll;
             _showOnlyJLab = !showAll;
+            _showNone = false;
 
             // 重新扫描和更新标记
             ResetMarkers();
             ScanLootboxes();
+        }
+
+        // 新增：设置不显示任何标记
+        public void SetShowNone()
+        {
+            _showAll = false;
+            _showOnlyJLab = false;
+            _showNone = true;
+
+            // 删除所有标记
+            ResetMarkers();
+            Debug.Log("已隐藏所有箱子标记");
         }
 
         // 切换UI可见性
@@ -219,7 +234,7 @@ namespace BetterMapMarker
         private System.Collections.IEnumerator DelayedScan()
         {
             yield return new WaitForSeconds(0.5f);
-            if (_mapActive || IsMapOpen())
+            if ((_mapActive || IsMapOpen()) && !_showNone)
                 ScanLootboxes();
         }
 
@@ -260,8 +275,11 @@ namespace BetterMapMarker
 
             CreateSimpleUI();
 
-            ScanLootboxes();
-            Debug.Log("开始追踪箱子位置");
+            if (!_showNone)
+            {
+                ScanLootboxes();
+                Debug.Log("开始追踪箱子位置");
+            }
             _scanCooldown = ScanIntervalSeconds;
         }
 
@@ -292,6 +310,10 @@ namespace BetterMapMarker
 
         private void ScanLootboxes()
         {
+            // 如果不显示任何标记，跳过扫描
+            if (_showNone)
+                return;
+                
             var lootboxes = UnityEngine.Object.FindObjectsOfType<InteractableLootbox>();
             Debug.Log($"扫描到 {lootboxes.Length} 个箱子");
 
@@ -468,6 +490,11 @@ namespace BetterMapMarker
             {
                 return;
             }
+            
+            // 如果不显示任何标记，跳过扫描
+            if (_showNone)
+                return;
+                
             // 简单的计时器逻辑
             _scanCooldown -= Time.deltaTime;
             if (_scanCooldown <= 0)
@@ -649,4 +676,3 @@ namespace BetterMapMarker
 
     }
 }
-

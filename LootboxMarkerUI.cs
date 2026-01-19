@@ -1,4 +1,4 @@
-﻿using TMPro;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using static UnityEngine.Rendering.DebugUI;
@@ -14,6 +14,7 @@ namespace BetterMapMarker
         // UI控件
         private Toggle _toggleAll;
         private Toggle _toggleJLabOnly;
+        private Toggle _toggleNone; // 新增：不显示标记选项
 
         // 面板状态
         private bool _panelVisible = true;
@@ -31,7 +32,7 @@ namespace BetterMapMarker
             if (canvas == null) return;
 
             // 创建主面板
-            var panelGO = new GameObject("ChestMarkerPanel", typeof(RectTransform));
+            var panelGO = new GameObject("LootboxMarkerPanel", typeof(RectTransform));
             panelGO.transform.SetParent(canvas.transform, false);
             _panel = panelGO.GetComponent<RectTransform>();
 
@@ -40,7 +41,7 @@ namespace BetterMapMarker
             _panel.anchorMax = new Vector2(1f, 0f);
             _panel.pivot = new Vector2(1f, 0f);  // 轴心在右下角
             _panel.anchoredPosition = new Vector2(-1000f, 20f);  
-            _panel.sizeDelta = new Vector2(240f, 180f);
+            _panel.sizeDelta = new Vector2(240f, 200f); 
 
             // 背景
             var bg = panelGO.AddComponent<Image>();
@@ -48,7 +49,7 @@ namespace BetterMapMarker
 
             // 垂直布局
             var layout = panelGO.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 8f;
+            layout.spacing = 6f;
             layout.padding = new RectOffset(10, 10, 10, 10);
             layout.childAlignment = TextAnchor.MiddleLeft;
 
@@ -57,20 +58,15 @@ namespace BetterMapMarker
             titleGO.transform.SetParent(panelGO.transform, false);
             var titleText = titleGO.AddComponent<TextMeshProUGUI>();
             titleText.text = "箱子标记显示";
-            titleText.fontSize = 20;
+            titleText.fontSize = 24;
             titleText.color = Color.yellow;
             titleText.alignment = TextAlignmentOptions.TopJustified;
 
             var titleLayout = titleGO.AddComponent<LayoutElement>();
-            titleLayout.preferredHeight = 25f;
+            titleLayout.preferredHeight = 30f;
 
             // 创建单选按钮
             CreateRadioButtons(panelGO.transform);
-
-            // 设置默认选择
-            _toggleAll.isOn = true;
-            _toggleJLabOnly.isOn = false;
-
         }
 
         private void CreateRadioButtons(Transform parent)
@@ -97,7 +93,7 @@ namespace BetterMapMarker
                 }
             });
 
-            // 创建"只显示Lab箱子"选项
+            // 创建"只显示高价值箱子"选项
             _toggleJLabOnly = CreateRadioToggle(containerGO.transform, "只显示高价值箱子", toggleGroup);
             _toggleJLabOnly.onValueChanged.AddListener(isOn =>
             {
@@ -107,6 +103,18 @@ namespace BetterMapMarker
                 }
             });
 
+            // 创建"不显示标记"选项
+            _toggleNone = CreateRadioToggle(containerGO.transform, "不显示箱子标记", toggleGroup);
+            _toggleNone.onValueChanged.AddListener(isOn =>
+            {
+                if (isOn && _modBehaviour != null)
+                {
+                    _modBehaviour.SetShowNone();
+                }
+            });
+
+            // 设置默认选择
+            _toggleAll.isOn = true;
         }
 
         private Toggle CreateRadioToggle(Transform parent, string label, ToggleGroup toggleGroup)
@@ -161,7 +169,7 @@ namespace BetterMapMarker
             var labelText = labelGO.AddComponent<TextMeshProUGUI>();
             labelText.text = label;
             labelText.fontSize = 20;
-            labelText.alignment= TextAlignmentOptions.MidlineLeft;
+            labelText.alignment = TextAlignmentOptions.MidlineLeft;
             labelText.color = Color.white;
             labelText.enableAutoSizing = false;
 

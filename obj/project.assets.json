@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Desktop\\BetterMapMarker\\BetterMapMarker.csproj",
+      "projectUniqueName": "D:\\Desktop\\鸭科夫mod代码和参考\\我的鸭科夫mod\\BetterMapMarker\\BetterMapMarker.csproj",
       "projectName": "BetterMapMarker",
-      "projectPath": "D:\\Desktop\\BetterMapMarker\\BetterMapMarker.csproj",
+      "projectPath": "D:\\Desktop\\鸭科夫mod代码和参考\\我的鸭科夫mod\\BetterMapMarker\\BetterMapMarker.csproj",
       "packagesPath": "C:\\Users\\think book\\.nuget\\packages\\",
-      "outputPath": "D:\\Desktop\\BetterMapMarker\\obj\\",
+      "outputPath": "D:\\Desktop\\鸭科夫mod代码和参考\\我的鸭科夫mod\\BetterMapMarker\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\think book\\AppData\\Roaming\\NuGet\\NuGet.Config",
