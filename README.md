@@ -12,5 +12,5 @@
 
 
   ### 2026.1.19更新：
-- 新增UI新增“不显示箱子标记”选项，以便和新Mod兼容  
-- 新Mod：[标记门卡和钥匙](https://github.com/lwt578/MarkerPickup)  
+- UI新增“不显示箱子标记”选项，以便和新Mod兼容  
+- 新Mod：[标记地面散落物](https://github.com/lwt578/MarkerPickup)  
