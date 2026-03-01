@@ -101,7 +101,7 @@ namespace BetterMapMarker
 
         // 高价值箱子目录
         private readonly List<string> _specialLootboxNames = new List<string> {
-           "Starter", "Lab","Lux","Cash","Hang","Formula","Weapon","Clone","Hidden","Technical","Bullet"
+           "Starter", "Lab","Lux","Cash","Hang","Formula","Weapon","Clone","Hidden","Technical","Bullet","Snow"
         };
 
         private bool _mapActive;
