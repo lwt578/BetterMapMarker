@@ -1,8 +1,8 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using static UnityEngine.Rendering.DebugUI;
-using Button = UnityEngine.UI.Button;
+using System;
+
 
 namespace BetterMapMarker
 {
@@ -11,13 +11,16 @@ namespace BetterMapMarker
         private ModBehaviour _modBehaviour;
         private RectTransform _panel;
 
-        // UI控件
         private Toggle _toggleAll;
         private Toggle _toggleJLabOnly;
-        private Toggle _toggleNone; // 新增：不显示标记选项
+        private Toggle _toggleNone;
+        private ToggleGroup _radioGroup; // 新增：保存组引用以进行批量操作
+        private Button _dropdownButton;
+        private GameObject _dropdownList;
 
-        // 面板状态
         private bool _panelVisible = true;
+        private bool _ignoreButtonChange = false;
+        private bool _isDropdownOpen = false;
 
         public void Initialize(ModBehaviour modBehaviour)
         {
@@ -27,156 +30,327 @@ namespace BetterMapMarker
 
         private void BuildUI()
         {
-            // 获取画布
-            var canvas = GetComponentInParent<Canvas>();
-            if (canvas == null) return;
+            try
+            {
+                var canvas = GetComponentInParent<Canvas>();
+                if (canvas == null) return;
 
-            // 创建主面板
-            var panelGO = new GameObject("LootboxMarkerPanel", typeof(RectTransform));
-            panelGO.transform.SetParent(canvas.transform, false);
-            _panel = panelGO.GetComponent<RectTransform>();
+                var panelGO = new GameObject("LootboxMarkerPanel", typeof(RectTransform));
+                panelGO.transform.SetParent(canvas.transform, false);
+                _panel = panelGO.GetComponent<RectTransform>();
 
-            // 设置面板位置（屏幕右下角）
-            _panel.anchorMin = new Vector2(1f, 0f);  // 右下角
-            _panel.anchorMax = new Vector2(1f, 0f);
-            _panel.pivot = new Vector2(1f, 0f);  // 轴心在右下角
-            _panel.anchoredPosition = new Vector2(-1000f, 20f);  
-            _panel.sizeDelta = new Vector2(240f, 200f); 
+                _panel.anchorMin = new Vector2(1f, 0f);
+                _panel.anchorMax = new Vector2(1f, 0f);
+                _panel.pivot = new Vector2(1f, 0f);
+                _panel.anchoredPosition = new Vector2(-800f, 20f);
+                _panel.sizeDelta = new Vector2(600f, 270f);
 
-            // 背景
-            var bg = panelGO.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+                var bg = panelGO.AddComponent<Image>();
+                bg.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
 
-            // 垂直布局
-            var layout = panelGO.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 6f;
-            layout.padding = new RectOffset(10, 10, 10, 10);
-            layout.childAlignment = TextAnchor.MiddleLeft;
+                CreateRadioButtons(panelGO.transform);
 
-            // 标题
-            var titleGO = new GameObject("Title", typeof(RectTransform));
-            titleGO.transform.SetParent(panelGO.transform, false);
-            var titleText = titleGO.AddComponent<TextMeshProUGUI>();
-            titleText.text = "箱子标记显示";
-            titleText.fontSize = 24;
-            titleText.color = Color.yellow;
-            titleText.alignment = TextAlignmentOptions.TopJustified;
+                var separatorGO = new GameObject("Separator", typeof(RectTransform));
+                separatorGO.transform.SetParent(panelGO.transform, false);
+                var sepRect = separatorGO.GetComponent<RectTransform>();
+                sepRect.anchorMin = new Vector2(1, 1);
+                sepRect.anchorMax = new Vector2(1, 1);
+                sepRect.pivot = new Vector2(1, 1);
+                sepRect.anchoredPosition = new Vector2(-20f, -20f);
+                sepRect.sizeDelta = new Vector2(280f, 30f);
 
-            var titleLayout = titleGO.AddComponent<LayoutElement>();
-            titleLayout.preferredHeight = 30f;
+                var separatorText = separatorGO.AddComponent<TextMeshProUGUI>();
+                separatorText.text = "或选择特定类型：";
+                separatorText.fontSize = 18;
+                separatorText.color = Color.gray;
 
-            // 创建单选按钮
-            CreateRadioButtons(panelGO.transform);
+                CreateSimpleDropdown(panelGO.transform);
+            }
+            catch (System.Exception ex) { Debug.LogError($"BuildUI 异常: {ex.Message}"); }
         }
 
         private void CreateRadioButtons(Transform parent)
         {
-            // 创建一个容器用于放置单选按钮
             var containerGO = new GameObject("RadioContainer", typeof(RectTransform));
             containerGO.transform.SetParent(parent, false);
+            var rect = containerGO.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = new Vector2(0, 1);
+            rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = new Vector2(20f, -20f);
+            rect.sizeDelta = new Vector2(280f, 200f);
 
             var layout = containerGO.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 5f;
-            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.spacing = 10f;
 
-            // 创建Toggle组实现单选
-            var toggleGroup = containerGO.AddComponent<ToggleGroup>();
-            toggleGroup.allowSwitchOff = false;
+            // 【关键修改】允许组内所有开关都关闭，用于支持下拉菜单的互斥
+            _radioGroup = containerGO.AddComponent<ToggleGroup>();
+            _radioGroup.allowSwitchOff = true;
 
-            // 创建"显示所有箱子"选项
-            _toggleAll = CreateRadioToggle(containerGO.transform, "显示所有箱子", toggleGroup);
-            _toggleAll.onValueChanged.AddListener(isOn =>
-            {
-                if (isOn && _modBehaviour != null)
-                {
-                    _modBehaviour.SetShowAll(true);
-                }
-            });
-
-            // 创建"只显示高价值箱子"选项
-            _toggleJLabOnly = CreateRadioToggle(containerGO.transform, "只显示高价值箱子", toggleGroup);
-            _toggleJLabOnly.onValueChanged.AddListener(isOn =>
-            {
-                if (isOn && _modBehaviour != null)
-                {
-                    _modBehaviour.SetShowAll(false);
-                }
-            });
-
-            // 创建"不显示标记"选项
-            _toggleNone = CreateRadioToggle(containerGO.transform, "不显示箱子标记", toggleGroup);
-            _toggleNone.onValueChanged.AddListener(isOn =>
-            {
-                if (isOn && _modBehaviour != null)
-                {
-                    _modBehaviour.SetShowNone();
-                }
-            });
-
-            // 设置默认选择
-            _toggleAll.isOn = true;
+            _toggleAll = CreateRadioToggle(containerGO.transform, "显示所有箱子", _radioGroup, true);
+            _toggleJLabOnly = CreateRadioToggle(containerGO.transform, "只显示高价值箱子", _radioGroup, false);
+            _toggleNone = CreateRadioToggle(containerGO.transform, "不显示箱子标记", _radioGroup, false);
         }
 
-        private Toggle CreateRadioToggle(Transform parent, string label, ToggleGroup toggleGroup)
+        private Toggle CreateRadioToggle(Transform parent, string label, ToggleGroup group, bool isOn)
         {
             var toggleGO = new GameObject("Toggle_" + label, typeof(RectTransform));
             toggleGO.transform.SetParent(parent, false);
 
             var toggle = toggleGO.AddComponent<Toggle>();
-            toggle.group = toggleGroup;
+            toggle.group = group;
+            toggle.isOn = isOn;
 
-            var toggleLayoutElem = toggleGO.AddComponent<LayoutElement>();
-            toggleLayoutElem.minHeight = 25f;
+            var layoutElement = toggleGO.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = 28f;
 
-            // 水平布局
-            var layout = toggleGO.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 5f;
-            layout.childControlWidth = false;  // 不强制控制子物体宽度
-            layout.childControlHeight = false; // 不强制控制子物体高度
-            layout.childAlignment = TextAnchor.MiddleLeft;  // 左中对齐
+            var horizontalLayout = toggleGO.AddComponent<HorizontalLayoutGroup>();
+            horizontalLayout.spacing = 8f;
+            horizontalLayout.childAlignment = TextAnchor.MiddleLeft;
+            horizontalLayout.childControlWidth = false;
+            horizontalLayout.childControlHeight = false;
 
-            // 单选框背景
             var bgGO = new GameObject("Background", typeof(RectTransform), typeof(Image));
             bgGO.transform.SetParent(toggleGO.transform, false);
+            bgGO.GetComponent<RectTransform>().sizeDelta = new Vector2(22f, 22f);
+            bgGO.GetComponent<Image>().color = new Color(0.3f, 0.3f, 0.3f, 0.9f);
 
-            var bgRT = bgGO.GetComponent<RectTransform>();
-            bgRT.sizeDelta = new Vector2(20f, 20f);
-
-            var bgImage = bgGO.GetComponent<Image>();
-            bgImage.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
-
-            // 勾选标记
             var checkGO = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
             checkGO.transform.SetParent(bgGO.transform, false);
+            var checkRect = checkGO.GetComponent<RectTransform>();
+            checkRect.sizeDelta = new Vector2(18f, 18f);
+            checkRect.anchorMin = new Vector2(0.5f, 0.5f);
+            checkRect.anchorMax = new Vector2(0.5f, 0.5f);
+            checkRect.anchoredPosition = Vector2.zero;
+            checkGO.GetComponent<Image>().color = Color.green;
 
-            var checkRT = checkGO.GetComponent<RectTransform>();
-            checkRT.sizeDelta = new Vector2(16f, 16f);
-            checkRT.anchorMin = new Vector2(0.5f, 0.5f);
-            checkRT.anchorMax = new Vector2(0.5f, 0.5f);
-            checkRT.anchoredPosition = Vector2.zero;
-
-            var checkImage = checkGO.GetComponent<Image>();
-            checkImage.color = Color.green;
-
-            // 标签
             var labelGO = new GameObject("Label", typeof(RectTransform));
             labelGO.transform.SetParent(toggleGO.transform, false);
-
-            // 标签布局控制
-            var labelLayout = labelGO.AddComponent<LayoutElement>();
-            labelLayout.minHeight = 24f;  // 与背景高度匹配
-
             var labelText = labelGO.AddComponent<TextMeshProUGUI>();
             labelText.text = label;
             labelText.fontSize = 20;
-            labelText.alignment = TextAlignmentOptions.MidlineLeft;
             labelText.color = Color.white;
-            labelText.enableAutoSizing = false;
 
-            toggle.targetGraphic = bgImage;
-            toggle.graphic = checkImage;
+            toggle.targetGraphic = bgGO.GetComponent<Image>();
+            toggle.graphic = checkGO.GetComponent<Image>();
+
+            toggle.onValueChanged.AddListener(isOnVal =>
+            {
+                if (_ignoreButtonChange) return;
+                if (!isOnVal && toggle.group.AnyTogglesOn() == false)
+                {
+                    // 用户试图取消唯一选中的按钮，强制重新选中
+                    _ignoreButtonChange = true;
+                    toggle.isOn = true;
+                    _ignoreButtonChange = false;
+                    return;
+                }
+
+                if (isOnVal && _modBehaviour != null && !_ignoreButtonChange)
+                {
+                    // 【互斥逻辑】点击单选按钮时，重置下拉菜单文字并关闭列表
+                    var btnText = _dropdownButton?.GetComponentInChildren<TextMeshProUGUI>();
+                    if (btnText != null) btnText.text = "选择类型...";
+                    if (_dropdownList != null) _dropdownList.SetActive(false);
+                    _isDropdownOpen = false;
+
+                    if (label == "显示所有箱子") _modBehaviour.SetShowAll();
+                    else if (label == "只显示高价值箱子") _modBehaviour.SetShowJLab();
+                    else if (label == "不显示箱子标记") _modBehaviour.SetShowNone();
+                }
+
+
+            });
 
             return toggle;
+        }
+
+        private void CreateSimpleDropdown(Transform parent)
+        {
+            var buttonGO = new GameObject("DropdownButton", typeof(RectTransform));
+            buttonGO.transform.SetParent(parent, false);
+            var rect = buttonGO.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1, 1);
+            rect.anchorMax = new Vector2(1, 1);
+            rect.pivot = new Vector2(1, 1);
+            rect.anchoredPosition = new Vector2(-20f, -60f);
+            rect.sizeDelta = new Vector2(280f, 40f);
+
+            _dropdownButton = buttonGO.AddComponent<Button>();
+            var img = buttonGO.AddComponent<Image>();
+            img.color = new Color(0.25f, 0.25f, 0.25f, 1f);
+
+            var textGO = new GameObject("Text", typeof(RectTransform));
+            textGO.transform.SetParent(buttonGO.transform, false);
+            var textRect = textGO.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(10f, 0f);
+            textRect.offsetMax = new Vector2(-30f, 0f);
+
+            var btnText = textGO.AddComponent<TextMeshProUGUI>();
+            btnText.text = "选择类型...";
+            btnText.fontSize = 18;
+            btnText.color = Color.white;
+            btnText.alignment = TextAlignmentOptions.MidlineLeft;
+
+            var arrowGO = new GameObject("Arrow", typeof(RectTransform));
+            arrowGO.transform.SetParent(buttonGO.transform, false);
+            var arrowRect = arrowGO.GetComponent<RectTransform>();
+            arrowRect.anchorMin = new Vector2(1, 0.5f);
+            arrowRect.anchorMax = new Vector2(1, 0.5f);
+            arrowRect.sizeDelta = new Vector2(20, 20);
+            arrowRect.anchoredPosition = new Vector2(-15f, 0f);
+            var arrowText = arrowGO.AddComponent<TextMeshProUGUI>();
+            arrowText.text = "▼";
+            arrowText.fontSize = 14;
+            arrowText.alignment = TextAlignmentOptions.Center;
+
+            CreateDropdownList(parent);
+            _dropdownButton.onClick.AddListener(ToggleDropdown);
+        }
+
+        private void CreateDropdownList(Transform parent)
+        {
+            _dropdownList = new GameObject("DropdownList", typeof(RectTransform));
+            _dropdownList.transform.SetParent(parent, false);
+
+            var listRect = _dropdownList.GetComponent<RectTransform>();
+            listRect.anchorMin = new Vector2(1, 1);
+            listRect.anchorMax = new Vector2(1, 1);
+            listRect.pivot = new Vector2(1, 1);
+            listRect.anchoredPosition = new Vector2(-20f, -105f);
+            listRect.sizeDelta = new Vector2(280f, 160f);
+
+            var listImage = _dropdownList.AddComponent<Image>();
+            listImage.color = new Color(0.15f, 0.15f, 0.15f, 0.98f);
+
+            var scrollRect = _dropdownList.AddComponent<ScrollRect>();
+
+            var viewportGO = new GameObject("Viewport", typeof(RectTransform));
+            viewportGO.transform.SetParent(_dropdownList.transform, false);
+            var viewportRect = viewportGO.GetComponent<RectTransform>();
+            viewportRect.anchorMin = Vector2.zero;
+            viewportRect.anchorMax = Vector2.one;
+            viewportRect.sizeDelta = Vector2.zero;
+            viewportRect.offsetMin = new Vector2(2f, 2f);
+            viewportRect.offsetMax = new Vector2(-2f, -2f);
+
+            var viewportImage = viewportGO.AddComponent<Image>();
+            viewportImage.color = new Color(1, 1, 1, 0.01f);
+            var mask = viewportGO.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+
+            var contentGO = new GameObject("Content", typeof(RectTransform));
+            contentGO.transform.SetParent(viewportGO.transform, false);
+            var contentRect = contentGO.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0, 1);
+            contentRect.anchorMax = new Vector2(1, 1);
+            contentRect.pivot = new Vector2(0, 1);
+
+            var contentLayout = contentGO.AddComponent<VerticalLayoutGroup>();
+            contentLayout.spacing = 2f;
+            contentLayout.padding = new RectOffset(2, 2, 2, 2);
+            contentLayout.childAlignment = TextAnchor.UpperCenter;
+            contentLayout.childControlWidth = true;
+            contentLayout.childControlHeight = true;
+
+            var contentFitter = contentGO.AddComponent<ContentSizeFitter>();
+            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            scrollRect.viewport = viewportRect;
+            scrollRect.content = contentRect;
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+
+            _dropdownList.transform.SetAsLastSibling();
+            _dropdownList.SetActive(false);
+        }
+
+        private void ToggleDropdown()
+        {
+            _isDropdownOpen = !_isDropdownOpen;
+            _dropdownList.SetActive(_isDropdownOpen);
+            if (_isDropdownOpen) RefreshDropdownOptions();
+        }
+
+        private void RefreshDropdownOptions()
+        {
+            if (_modBehaviour == null) return;
+            try
+            {
+                var types = _modBehaviour.GetAllLootboxTypes();
+                var contentTransform = _dropdownList.transform.Find("Viewport/Content");
+                if (contentTransform == null) return;
+
+                foreach (Transform child in contentTransform) Destroy(child.gameObject);
+
+                CreateDropdownOption(contentTransform, "选择类型...", true);
+                foreach (var type in types) CreateDropdownOption(contentTransform, type, false);
+
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(contentTransform.GetComponent<RectTransform>());
+            }
+            catch (System.Exception ex) { Debug.LogError($"RefreshDropdownOptions 异常: {ex.Message}"); }
+        }
+
+        private void CreateDropdownOption(Transform parent, string text, bool isPlaceholder)
+        {
+            var optionGO = new GameObject("Option_" + text, typeof(RectTransform));
+            optionGO.transform.SetParent(parent, false);
+
+            var layoutElement = optionGO.AddComponent<LayoutElement>();
+            layoutElement.minHeight = 35f;
+            layoutElement.preferredHeight = 35f;
+
+            var optionImage = optionGO.AddComponent<Image>();
+            optionImage.color = isPlaceholder ? new Color(0.4f, 0.4f, 0.4f, 1f) : new Color(0.25f, 0.25f, 0.25f, 1f);
+            optionImage.raycastTarget = true;
+
+            var textGO = new GameObject("Text", typeof(RectTransform));
+            textGO.transform.SetParent(optionGO.transform, false);
+            var textRect = textGO.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(10f, 2f);
+            textRect.offsetMax = new Vector2(-10f, -2f);
+
+            var optionText = textGO.AddComponent<TextMeshProUGUI>();
+            optionText.text = text;
+            optionText.fontSize = 18;
+            optionText.color = Color.white;
+            optionText.alignment = TextAlignmentOptions.MidlineLeft;
+
+            var button = optionGO.AddComponent<Button>();
+            button.targetGraphic = optionImage;
+            button.onClick.AddListener(() => OnOptionSelected(text));
+        }
+
+        private void OnOptionSelected(string selectedText)
+        {
+            var buttonText = _dropdownButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (buttonText != null) buttonText.text = selectedText;
+
+            _dropdownList.SetActive(false);
+            _isDropdownOpen = false;
+
+            // 【互斥逻辑】选择下拉菜单项时，清空左侧单选按钮的选中状态
+            _ignoreButtonChange = true;
+            if (_radioGroup != null) _radioGroup.SetAllTogglesOff();
+            _ignoreButtonChange = false;
+
+            if (_modBehaviour != null)
+            {
+                if (selectedText == "选择类型...")
+                    _modBehaviour.SetTypeFilter(null);
+                else
+                    _modBehaviour.SetTypeFilter(selectedText);
+            }
+        }
+
+        public void RefreshTypeDropdown()
+        {
+            if (_dropdownList != null && _dropdownList.activeSelf) RefreshDropdownOptions();
         }
 
         public void SetVisible(bool visible)
@@ -185,6 +359,11 @@ namespace BetterMapMarker
             if (_panel != null)
             {
                 _panel.gameObject.SetActive(visible);
+                if (!visible && _dropdownList != null)
+                {
+                    _dropdownList.SetActive(false);
+                    _isDropdownOpen = false;
+                }
             }
         }
     }
