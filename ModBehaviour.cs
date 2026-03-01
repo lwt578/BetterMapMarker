@@ -380,7 +380,7 @@ namespace BetterMapMarker
                 _LootboxMarkerUI.SetVisible(_isUIVisible);
             }
 
-            RemoveLootboxMarkers();
+            ResetMarkers();
             ScanLootboxes();
             _scanCooldown = ScanIntervalSeconds;
             Debug.Log("开始追踪箱子位置");
@@ -535,7 +535,7 @@ namespace BetterMapMarker
                     marker.Poi.HideIcon = false;
 
                 }
-                Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {{IsLootboxEmpty(lootbox)}} ShouldShow: {ShouldShow(lootbox)}" );
+                Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}" );
 
             }
 
@@ -562,7 +562,7 @@ namespace BetterMapMarker
             marker.Poi.Color = marker.Color;
             marker.Poi.Setup(MarkerVisuals.SetMarkerIcon(marker.Lootbox), displayName, followActiveScene: true);
             marker.Poi.HideIcon = false;
-            Debug.Log("更新箱子标记（预设）{marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(lootbox)} ShouldShow: {ShouldShow(lootbox)}");
+            Debug.Log("更新箱子标记（预设）{marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}");
 
             return;
         }
@@ -681,7 +681,7 @@ namespace BetterMapMarker
 
             Destroy(marker.MarkerObject);
 
-            Debug.Log($"销毁箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {{IsLootboxEmpty(lootbox)}} ShouldShow: {ShouldShow(lootbox)}");
+            Debug.Log($"销毁箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}");
 
             _boxmarkers.Remove(lootbox);
 
