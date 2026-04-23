@@ -77,7 +77,15 @@ namespace BetterMapMarker
             public LootboxState State;
             public Color Color;
         }
-
+        private sealed class KeyMarker
+        {
+            public InteractablePickup? Pickup;
+            public Item Item;
+            public GameObject? MarkerObject;
+            public SimplePointOfInterest? Poi;
+            public string? DisplayName;
+            public Color Color;
+        }
 
         /// <summary>
         /// Map a character to its marker.
@@ -85,18 +93,24 @@ namespace BetterMapMarker
         private readonly Dictionary<InteractableLootbox, LootboxMarker> _boxmarkers =
             new Dictionary<InteractableLootbox, LootboxMarker>();
 
+        private readonly Dictionary<InteractablePickup, KeyMarker> _pickupmarkers =
+            new Dictionary<InteractablePickup, KeyMarker>();
 
         private bool _showAll = true;  // 默认显示所有箱子
         private bool _showOnlyJLab = false;  // 只显示JLab箱等高价值箱子
         private bool _showNone = false;  // 不显示任何标记
 
-        // 新增：类型过滤相关字段
+
+        // 下拉菜单选项
         private bool _useTypeFilter = false;
         private string _selectedFilterType = null;
+        private bool _usePickupFilter = false;
+        private string _selectedPickupFilter = null;
 
-        internal static bool HasSelectedUpdate { get; private set; }
+        internal static bool HasSelectedUpdate_Lootbox { get; private set; }
+        internal static bool HasSelectedUpdate_Pickup { get; private set; }
 
-        private LootboxMarkerUI _LootboxMarkerUI;  // UI实例
+        private SearchUI _SearchUI;  // UI实例
         private bool _isUIVisible = true;  // UI是否可见
 
         // 高价值箱子目录
@@ -109,7 +123,7 @@ namespace BetterMapMarker
         private const float ScanIntervalSeconds = 1f;
 
 
-        // 修改 ShouldShow 以支持类型过滤
+        // 箱子类型过滤
         private bool ShouldShow(InteractableLootbox lootbox)
         {
 
@@ -137,13 +151,13 @@ namespace BetterMapMarker
             return _showAll;
         }
 
-        // --- 新增：根据箱子名称获取类型 ---
+        // --- 根据箱子名称获取类型 ---
         private string GetLootboxType(InteractableLootbox lootbox)
         {
             return string.IsNullOrEmpty(lootbox.InteractName) ? "未知" : lootbox.InteractName;
         }
 
-        // --- 新增：获取当前场景中所有存在的箱子类型（去重排序）---
+        // 获取当前场景中所有存在的箱子类型（去重排序）
         public List<string> GetAllLootboxTypes()
         {
 
@@ -166,13 +180,12 @@ namespace BetterMapMarker
             sorted.Sort();
             return sorted;
         }
-
-
-
-        // --- 新增：设置类型过滤 ---
+        /// <summary>
+        /// 箱子筛选逻辑
+        /// </summary>
         public void SetTypeFilter(string type)
         {
-            // 【必须添加】当用户通过下拉菜单选择特定类型时，强制关闭“不显示”状态
+            // 当用户通过下拉菜单选择特定类型时，三个菜单都不选中
             _showNone = false;
             _showAll = false;
             _showOnlyJLab = false;
@@ -188,13 +201,11 @@ namespace BetterMapMarker
                 _selectedFilterType = type;
             }
 
-            HasSelectedUpdate = true;
+            HasSelectedUpdate_Lootbox = true;
 
         }
 
-
-
-        // 修改原有的显示模式设置，清除类型过滤
+        // 箱子类型（全显示/只看高价值/不显示）切换
         public void SetShowAll()
         {
             _showAll = true;
@@ -203,7 +214,7 @@ namespace BetterMapMarker
             _useTypeFilter = false;
             _selectedFilterType = null;
 
-            HasSelectedUpdate = true;
+            HasSelectedUpdate_Lootbox = true;
         }
 
         public void SetShowJLab()
@@ -214,7 +225,7 @@ namespace BetterMapMarker
             _useTypeFilter = false;
             _selectedFilterType = null;
 
-            HasSelectedUpdate = true;
+            HasSelectedUpdate_Lootbox = true;
         }
 
         public void SetShowNone()
@@ -225,21 +236,68 @@ namespace BetterMapMarker
             _useTypeFilter = false;
             _selectedFilterType = null;
 
-            HasSelectedUpdate = true;
-            ResetMarkers();
+            HasSelectedUpdate_Lootbox = true;
+            ResetLootboxMarkers();
         }
 
         internal static void ApplySelectedChanges()
         {
-            if (!HasSelectedUpdate)
+            if (!HasSelectedUpdate_Lootbox && !HasSelectedUpdate_Pickup)
                 return;
 
-            HasSelectedUpdate = false;
+            HasSelectedUpdate_Lootbox = false;
+            HasSelectedUpdate_Pickup = false;
+
+        }
+
+        //获取所有散落物名称
+        public List<string> GetAllPickupNames()
+        {
+            HashSet<string> names = new HashSet<string>();
+            var pickups = UnityEngine.Object.FindObjectsOfType<InteractablePickup>();
+            foreach (var pickup in pickups)
+            {
+                if (pickup == null || pickup.ItemAgent?.Item == null) continue;
+                string name = GetPickupDisplayName(pickup);
+                if (!string.IsNullOrEmpty(name))
+                    names.Add(name);
+            }
+            List<string> sorted = new List<string>(names);
+            sorted.Sort();
+            return sorted;
+        }
+
+        /// <summary>
+        /// 散落物筛选逻辑
+        /// </summary>
+
+        public void SetPickupFilter(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                _usePickupFilter = false;
+                _selectedPickupFilter = null;
+            }
+            else
+            {
+                _usePickupFilter = true;
+                _selectedPickupFilter = name;
+            }
+            // 触发标记更新
+            HasSelectedUpdate_Pickup = true;
+        }
+
+        //判断某个散落物是否应该显示（根据当前筛选条件）
+        private bool ShouldShowPickup(InteractablePickup pickup)
+        {
+            if (!_usePickupFilter) return true;
+            if (pickup == null || pickup.ItemAgent?.Item == null) return false;
+            return pickup.ItemAgent.Item.DisplayName == _selectedPickupFilter;
         }
 
         private void CreateSimpleUI()
         {
-            if (_LootboxMarkerUI != null) return;
+            if (_SearchUI != null) return;
 
             try
             {
@@ -249,14 +307,14 @@ namespace BetterMapMarker
                 // 创建UI
                 var uiGO = new GameObject("SimpleLootboxUI", typeof(RectTransform));
                 uiGO.transform.SetParent(mapView.transform, false);
-                _LootboxMarkerUI = uiGO.AddComponent<LootboxMarkerUI>();
-                _LootboxMarkerUI.Initialize(this);
+                _SearchUI = uiGO.AddComponent<SearchUI>();
+                _SearchUI.Initialize(this);
 
-                Debug.Log("箱子标记UI已创建");
+                Debug.Log("UI已创建");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"创建箱子标记UI失败: {ex.Message}");
+                Debug.LogError($"创建UI失败: {ex.Message}");
             }
         }
 
@@ -264,10 +322,10 @@ namespace BetterMapMarker
         {
             try
             {
-                if (_LootboxMarkerUI != null)
+                if (_SearchUI != null)
                 {
-                    Destroy(_LootboxMarkerUI.gameObject);
-                    _LootboxMarkerUI = null;
+                    Destroy(_SearchUI.gameObject);
+                    _SearchUI = null;
                 }
             }
             catch { }
@@ -277,9 +335,9 @@ namespace BetterMapMarker
         public void ToggleUIVisibility()
         {
             _isUIVisible = !_isUIVisible;
-            if (_LootboxMarkerUI != null)
+            if (_SearchUI != null)
             {
-                _LootboxMarkerUI.SetVisible(_isUIVisible);
+                _SearchUI.SetVisible(_isUIVisible);
             }
         }
 
@@ -303,7 +361,6 @@ namespace BetterMapMarker
 
         }
 
-
         void OnDisable()
         {
             LevelManager.OnAfterLevelInitialized -= AddSelfIconOnMaker;
@@ -320,16 +377,18 @@ namespace BetterMapMarker
         private void OnSceneStartedLoading(SceneLoadingContext context)
         {
             // Clear markers when leaving the current scene
-            ResetMarkers();
+            ResetLootboxMarkers();
+            ResetPickupMarkers();
         }
 
         // 在场景加载完成后刷新 UI 下拉菜单
         private void OnSceneFinishedLoading(SceneLoadingContext context)
         {
             StartCoroutine(DelayedScan());
-            if (_LootboxMarkerUI != null)
+            if (_SearchUI != null)
             {
-                _LootboxMarkerUI.RefreshTypeDropdown(); // 刷新类型列表
+                _SearchUI.RefreshLootboxTypeDropdown(); // 刷新类型列表
+
             }
 
         }
@@ -339,6 +398,7 @@ namespace BetterMapMarker
             yield return new WaitForSeconds(0.5f);
             if ((_mapActive || IsMapOpen()) && !_showNone)
                 ScanLootboxes();
+            ScanPickups();
         }
 
         private static bool IsMapOpen()
@@ -353,9 +413,9 @@ namespace BetterMapMarker
             {
                 BeginTracking();
 
-                if (_LootboxMarkerUI != null)
+                if (_SearchUI != null)
                 {
-                    _LootboxMarkerUI.SetVisible(_isUIVisible);
+                    _SearchUI.SetVisible(_isUIVisible);
                 }
             }
 
@@ -363,9 +423,9 @@ namespace BetterMapMarker
             {
                 EndTracking();
                 // 隐藏UI，但保持对象
-                if (_LootboxMarkerUI != null)
+                if (_SearchUI != null)
                 {
-                    _LootboxMarkerUI.SetVisible(false);
+                    _SearchUI.SetVisible(false);
                 }
             }
         }
@@ -374,16 +434,18 @@ namespace BetterMapMarker
         {
             _mapActive = true;
             CreateSimpleUI();
-            if (_LootboxMarkerUI != null)
+            if (_SearchUI != null)
             {
-                _LootboxMarkerUI.RefreshTypeDropdown();
-                _LootboxMarkerUI.SetVisible(_isUIVisible);
+                _SearchUI.RefreshLootboxTypeDropdown();
+                _SearchUI.SetVisible(_isUIVisible);
             }
 
-            ResetMarkers();
+            ResetLootboxMarkers();
+            ResetPickupMarkers();
             ScanLootboxes();
+            ScanPickups();
             _scanCooldown = ScanIntervalSeconds;
-            Debug.Log("开始追踪箱子位置");
+            Debug.Log("开始追踪");
 
         }
 
@@ -396,6 +458,7 @@ namespace BetterMapMarker
             // ResetMarkers();
 
         }
+
 
         private static bool IsLootboxValid(InteractableLootbox lootbox)
         {
@@ -410,33 +473,67 @@ namespace BetterMapMarker
             return true;
         }
 
-        private void RemoveLootboxMarkers()
+        private static bool IsPickupValid(InteractablePickup pickup)
         {
-            List<InteractableLootbox> toRemove = new List<InteractableLootbox>();
-            foreach (var kvp in _boxmarkers)
-            {
-                var box = kvp.Key;
-                // 如果：箱子本身被销毁了 OR 箱子空了 OR UI筛选不匹配
-                if (box == null || IsLootboxEmpty(box) || !ShouldShow(box))
-                {
-                    toRemove.Add(box);
-                }
-            }
-            foreach (var box in toRemove)
-            {
-                DestroyMarker(box);
-            }
-        }
 
+            if (pickup == null || pickup.ItemAgent?.Item == null)
+                return false;
+
+            var go = pickup.gameObject;
+            if (!go.scene.IsValid() || !go.scene.isLoaded)
+                return false;
+
+            return true;
+        }
+        /// <summary>
+        /// Check for configuration changes and only apply changes when config is changed.
+        /// </summary>
+        private void Update()
+        {
+            if (!_mapActive)
+            {
+                return;
+            }
+
+            // 如果不显示任何标记，跳过扫描
+            if (_showNone)
+                return;
+
+            // 简单的计时器逻辑
+            _scanCooldown -= Time.deltaTime;
+            if (_scanCooldown <= 0)
+            {
+                ScanLootboxes();
+                ScanPickups();
+                _scanCooldown = ScanIntervalSeconds;
+            }
+
+            if (HasSelectedUpdate_Lootbox)
+            {
+                ResetLootboxMarkers(); // 销毁箱子标记
+                ScanLootboxes();// 根据新配置重新扫描并创建箱子标记
+                _scanCooldown = ScanIntervalSeconds;
+                ApplySelectedChanges();                //重置选项切换
+            }
+
+            if (HasSelectedUpdate_Pickup)
+            {
+                ResetPickupMarkers();// 销毁散落物标记
+                ScanPickups();// 根据新配置重新扫描并创建散落物标记
+                _scanCooldown = ScanIntervalSeconds;
+                ApplySelectedChanges();                //重置选项切换
+            }
+
+        }
         private void ScanLootboxes()
         {
-            
+
 
             // 1. 如果处于“不显示任何标记”模式，销毁标记并返回
-            
+
             if (_showNone)
             {
-                ResetMarkers();
+                ResetLootboxMarkers();
                 return;
             }
 
@@ -454,24 +551,39 @@ namespace BetterMapMarker
 
                 // 屏蔽无关容器
                 if (lootbox.name.Contains("PetProxy", StringComparison.OrdinalIgnoreCase) ||
-                    lootbox.name.Contains("PlayerStorage", StringComparison.OrdinalIgnoreCase)||
+                    lootbox.name.Contains("PlayerStorage", StringComparison.OrdinalIgnoreCase) ||
                     IsLootboxEmpty(lootbox))
                     continue;
 
 
-                AddOrUpdateMarker(lootbox);
+                AddOrUpdateLootboxMarker(lootbox);
 
             }
         }
 
 
 
-        private void AddOrUpdateMarker(InteractableLootbox lootbox)
+        private void ScanPickups()
+        {
+            RemovePickupMarkers(); // 先清理不符合条件的标记
+
+            var pickups = UnityEngine.Object.FindObjectsOfType<InteractablePickup>();
+            Debug.Log($"扫描到 {pickups.Length} 个散落物");
+
+            foreach (var pickup in pickups)
+            {
+                if (pickup == null || pickup.ItemAgent?.Item == null) continue;
+                AddOrUpdatePickupMarker(pickup);
+            }
+        }
+
+
+        private void AddOrUpdateLootboxMarker(InteractableLootbox lootbox)
         {
 
-            if (!IsLootboxValid(lootbox))  return;
+            if (!IsLootboxValid(lootbox)) return;
 
-            var displayName = GetDisplayName(lootbox);
+            var displayName = GetLootboxDisplayName(lootbox);
             var currentState = GetLootboxState(lootbox);
 
 
@@ -480,13 +592,13 @@ namespace BetterMapMarker
                 // 检查箱子是否被打开了或者空了，或者UI筛选不匹配了，如果是则销毁标记
                 if (IsLootboxEmpty(marker.Lootbox) || !ShouldShow(marker.Lootbox))
                 {
-                    DestroyMarker(lootbox);
+                    DestroyLootboxMarker(lootbox);
                     return;
                 }
                 else
                 {
                     if (marker.State != currentState)
-                        UpdateMarker(marker, displayName);
+                        UpdateLootboxMarker(marker, displayName);
                     else
                         return;
                 }
@@ -535,23 +647,23 @@ namespace BetterMapMarker
                     marker.Poi.HideIcon = false;
 
                 }
-                Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}" );
+                Debug.Log($"创建箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}");
 
             }
 
         }
 
-        private void UpdateMarker(LootboxMarker marker, string displayName)
+        private void UpdateLootboxMarker(LootboxMarker marker, string displayName)
         {
 
-             if (marker?.MarkerObject == null || marker.Poi == null)  return;
+            if (marker?.MarkerObject == null || marker.Poi == null) return;
 
             //marker.MarkerObject.transform.position = marker.Lootbox.transform.position;
 
             if (IsLootboxEmpty(marker.Lootbox) || !ShouldShow(marker.Lootbox))
             {
                 //Debug.Log("检查箱子是否为空（updatemarker）");
-                DestroyMarker(marker.Lootbox);
+                DestroyLootboxMarker(marker.Lootbox);
                 return;
             }
 
@@ -567,7 +679,115 @@ namespace BetterMapMarker
             return;
         }
 
-        private static string GetDisplayName(InteractableLootbox lootbox)
+        private void AddOrUpdatePickupMarker(InteractablePickup pickup)
+        {
+            if (!IsPickupValid(pickup))
+                return;
+
+            // 如果已有标记但不符合显示条件，则销毁
+            if (_pickupmarkers.TryGetValue(pickup, out var existingMarker))
+            {
+                if (IsPickupPicked(pickup) || !ShouldShowPickup(pickup))
+                {
+                    DestroyPickupMarker(pickup);
+                    return;
+                }
+                else
+                {
+                    UpdatePickupMarker(existingMarker);
+                    return;
+                }
+            }
+
+            // 新增标记前检查是否应该显示
+            if (!ShouldShowPickup(pickup))
+                return;
+
+            // 创建标记逻辑
+            var displayName = GetPickupDisplayName(pickup);
+            var item = pickup.ItemAgent.Item;
+            var markerObject = new GameObject($"{displayName}");
+            markerObject.transform.position = pickup.transform.position;
+
+            if (MultiSceneCore.MainScene.HasValue)
+            {
+                SceneManager.MoveGameObjectToScene(markerObject, MultiSceneCore.MainScene.Value);
+            }
+
+            var poi = markerObject.AddComponent<SimplePointOfInterest>();
+            var color = new Color(1f, 0.6f, 0f, 1f);
+
+            var marker = new KeyMarker
+            {
+                Pickup = pickup,
+                Item = item,
+                MarkerObject = markerObject,
+                Poi = poi,
+                DisplayName = displayName,
+                Color = color
+            };
+
+            _pickupmarkers[pickup] = marker;
+
+            if (marker.Poi == null) return;
+
+            var icon = MapMarkerManager.Icons[0];
+            if (icon != null)
+            {
+                marker.Poi.Color = marker.Color;
+                marker.Poi.ShadowColor = Color.clear;
+                marker.Poi.Setup(icon, displayName, followActiveScene: true);
+                marker.Poi.HideIcon = false;
+            }
+            Debug.Log($"创建散落物标记: {marker.DisplayName} 位置: {pickup.transform.position}");
+        }
+
+        private void UpdatePickupMarker(KeyMarker marker)
+        {
+
+            if (marker?.MarkerObject == null || marker.Poi == null)
+                return;
+
+            if (!IsPickupValid(marker.Pickup))
+            {
+                DestroyPickupMarker(marker.Pickup);
+                return;
+            }
+
+            if (IsPickupPicked(marker.Pickup))
+            {
+                DestroyPickupMarker(marker.Pickup);
+                return;
+            }
+
+            if (marker.MarkerObject.transform.position == marker.Pickup.transform.position)
+                return;
+
+            else
+            {
+                PointsOfInterests.Unregister(marker.Poi);
+                marker.MarkerObject.transform.position = marker.Pickup.transform.position;
+
+                marker.Poi = marker.MarkerObject.AddComponent<SimplePointOfInterest>();
+                var icon = MapMarkerManager.Icons[0];
+
+                if (icon != null)
+                {
+                    marker.Poi.Color = marker.Color;
+                    marker.Poi.ShadowColor = Color.clear;
+
+                    marker.Poi.Setup(icon, marker.DisplayName, followActiveScene: true);
+                    marker.Poi.HideIcon = false;
+
+                }
+
+
+            }
+        }
+
+        #region 获取箱子/散落物状态
+
+        private static string GetLootboxDisplayName(InteractableLootbox lootbox)
         {
             string name = lootbox.name;//show box name(InteractName)
             if (name.Contains("Formula", StringComparison.OrdinalIgnoreCase))
@@ -577,6 +797,14 @@ namespace BetterMapMarker
             }
             else
                 return lootbox.InteractName;
+
+        }
+        private static string GetPickupDisplayName(InteractablePickup pickup)
+        {
+            //Debug.Log("获取名字");
+            var item = pickup.ItemAgent.Item;
+            string name = item.DisplayName;
+            return name;
 
         }
 
@@ -609,41 +837,21 @@ namespace BetterMapMarker
             return false;
         }
 
-        /// <summary>
-        /// Check for configuration changes and only apply changes when config is changed.
-        /// </summary>
-        private void Update()
+        private bool IsPickupPicked(InteractablePickup pickup)
         {
-            if (!_mapActive)
-            {
-                return;
-            }
 
-            // 如果不显示任何标记，跳过扫描
-            if (_showNone)
-                return;
-
-            // 简单的计时器逻辑
-            _scanCooldown -= Time.deltaTime;
-            if (_scanCooldown <= 0)
-            {
-                ScanLootboxes();
-                _scanCooldown = ScanIntervalSeconds;
-            }
-
-            if (HasSelectedUpdate)
-            {
-                
-                ResetMarkers();                           // 销毁所有现有标记
-                ScanLootboxes();                          // 根据新配置重新扫描并创建标记
-                _scanCooldown = ScanIntervalSeconds;
-                ApplySelectedChanges();                //重置选项切换
-            }
+            var item = pickup.ItemAgent.Item;
+            if (item.transform.parent == null)
+                return false;
+            else
+                return true;
         }
+
+        #endregion
 
         #region 重置和删除标记
 
-        private void ResetMarkers()
+        private void ResetLootboxMarkers()
         {
             foreach (var marker in _boxmarkers.Values)
             {
@@ -654,9 +862,27 @@ namespace BetterMapMarker
 
                 DestroySafely(marker.MarkerObject);
             }
+
             _boxmarkers.Clear();
+            //Debug.Log("重置所有箱子标记");
 
         }
+
+        private void ResetPickupMarkers()
+        {
+            foreach (var marker in _pickupmarkers.Values)
+            {
+                if (marker.Poi != null)
+                {
+                    PointsOfInterests.Unregister(marker.Poi);
+                }
+                DestroySafely(marker.MarkerObject);
+            }
+            _pickupmarkers.Clear();
+            //Debug.Log("重置所有散落物标记");
+
+        }
+
 
         private static void DestroySafely(GameObject go)
         {
@@ -666,7 +892,25 @@ namespace BetterMapMarker
             }
         }
 
-        private void DestroyMarker(InteractableLootbox lootbox)
+        private void RemoveLootboxMarkers()
+        {
+            List<InteractableLootbox> toRemove = new List<InteractableLootbox>();
+            foreach (var kvp in _boxmarkers)
+            {
+                var box = kvp.Key;
+                // 如果：箱子本身被销毁了 OR 箱子空了 OR UI筛选不匹配
+                if (box == null || IsLootboxEmpty(box) || !ShouldShow(box))
+                {
+                    toRemove.Add(box);
+                }
+            }
+            foreach (var box in toRemove)
+            {
+                DestroyLootboxMarker(box);
+            }
+        }
+
+        private void DestroyLootboxMarker(InteractableLootbox lootbox)
         {
             if (lootbox == null)
                 return;
@@ -681,12 +925,50 @@ namespace BetterMapMarker
 
             Destroy(marker.MarkerObject);
 
-            Debug.Log($"销毁箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}");
+            //Debug.Log($"销毁箱子标记: {marker.DisplayName} 位置: {lootbox.transform.position} 状态: {marker.State} 是否为空: {IsLootboxEmpty(marker.Lootbox)} ShouldShow: {ShouldShow(marker.Lootbox)}");
 
             _boxmarkers.Remove(lootbox);
 
 
         }
+
+        private void RemovePickupMarkers()
+        {
+            List<InteractablePickup> toRemove = new List<InteractablePickup>();
+            foreach (var kvp in _pickupmarkers)
+            {
+                var pickup = kvp.Key;
+                if (pickup == null || IsPickupPicked(pickup) || !ShouldShowPickup(pickup))
+                {
+                    toRemove.Add(pickup);
+                }
+            }
+            foreach (var pickup in toRemove)
+            {
+                DestroyPickupMarker(pickup);
+            }
+        }
+
+        private void DestroyPickupMarker(InteractablePickup pickup)
+        {
+
+            Debug.Log("执行DestroyMarker");
+            if (!_pickupmarkers.TryGetValue(pickup, out var marker))
+                return;
+
+            if (marker.Poi != null)
+            {
+                PointsOfInterests.Unregister(marker.Poi);
+                marker.Poi = null;
+            }
+
+            Destroy(marker.MarkerObject);
+
+            _pickupmarkers.Remove(pickup);
+            //Debug.Log("移除散落物标记");
+
+        }
+
         #endregion
 
         #region 新增一个自定义图标（j-lab箱）
